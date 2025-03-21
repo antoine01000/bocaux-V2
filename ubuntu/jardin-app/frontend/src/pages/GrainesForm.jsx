@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
+import { legumesData } from '../utils/foodData';
 
 const FormContainer = styled.div`
   max-width: 800px;
@@ -37,6 +38,15 @@ const Input = styled.input`
   border: 1px solid #ddd;
   border-radius: var(--border-radius);
   font-size: 1rem;
+`;
+
+const Select = styled.select`
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  background-color: white;
 `;
 
 const TextArea = styled.textarea`
@@ -98,6 +108,26 @@ const SuccessMessage = styled.div`
   border-radius: var(--border-radius);
 `;
 
+const ImagePreview = styled.div`
+  width: 100%;
+  max-width: 300px;
+  height: 200px;
+  margin: 1rem auto;
+  background-color: #f0f0f0;
+  background-image: ${props => props.imageUrl ? `url(${props.imageUrl})` : 'none'};
+  background-size: cover;
+  background-position: center;
+  border-radius: var(--border-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+`;
+
+const CustomVarietyInput = styled.div`
+  margin-top: 1rem;
+`;
+
 const GrainesForm = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -115,6 +145,53 @@ const GrainesForm = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedLegume, setSelectedLegume] = useState('');
+  const [selectedVariete, setSelectedVariete] = useState('');
+  const [varietes, setVarietes] = useState([]);
+  const [useCustomVariety, setUseCustomVariety] = useState(false);
+  const [customVariety, setCustomVariety] = useState('');
+
+  // Mettre à jour les variétés disponibles lorsque le légume sélectionné change
+  useEffect(() => {
+    if (selectedLegume) {
+      const legume = legumesData.find(l => l.id === selectedLegume);
+      if (legume) {
+        setVarietes(legume.varietes);
+        setSelectedVariete(''); // Réinitialiser la variété sélectionnée
+        setFormData(prev => ({
+          ...prev,
+          nom: legume.nom,
+          variete: '',
+          photo_url: ''
+        }));
+      }
+    }
+  }, [selectedLegume]);
+
+  // Mettre à jour la photo lorsque la variété sélectionnée change
+  useEffect(() => {
+    if (selectedVariete && !useCustomVariety) {
+      const variete = varietes.find(v => v.id === selectedVariete);
+      if (variete) {
+        setFormData(prev => ({
+          ...prev,
+          variete: variete.nom,
+          photo_url: variete.photo
+        }));
+      }
+    }
+  }, [selectedVariete, varietes, useCustomVariety]);
+
+  // Mettre à jour la variété personnalisée
+  useEffect(() => {
+    if (useCustomVariety) {
+      setFormData(prev => ({
+        ...prev,
+        variete: customVariety,
+        photo_url: ''
+      }));
+    }
+  }, [customVariety, useCustomVariety]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -122,6 +199,25 @@ const GrainesForm = () => {
       ...formData,
       [name]: value
     });
+  };
+
+  const handleLegumeChange = (e) => {
+    setSelectedLegume(e.target.value);
+    setUseCustomVariety(false);
+  };
+
+  const handleVarieteChange = (e) => {
+    if (e.target.value === 'custom') {
+      setUseCustomVariety(true);
+      setSelectedVariete('');
+    } else {
+      setUseCustomVariety(false);
+      setSelectedVariete(e.target.value);
+    }
+  };
+
+  const handleCustomVarietyChange = (e) => {
+    setCustomVariety(e.target.value);
   };
 
   const handleSubmit = async (e) => {
@@ -136,9 +232,16 @@ const GrainesForm = () => {
       setLoading(true);
       setError(null);
 
+      // Préparer les données en gérant correctement les champs de date vides
+      const dataToSubmit = {
+        ...formData,
+        // Si date_limite_utilisation est vide, on la définit à null
+        date_limite_utilisation: formData.date_limite_utilisation || null
+      };
+
       const { error } = await supabase
         .from('graines')
-        .insert([formData]);
+        .insert([dataToSubmit]);
 
       if (error) {
         throw error;
@@ -163,28 +266,55 @@ const GrainesForm = () => {
         
         <form onSubmit={handleSubmit}>
           <FormGroup>
-            <Label htmlFor="nom">Nom du légume *</Label>
-            <Input
-              type="text"
-              id="nom"
-              name="nom"
-              value={formData.nom}
-              onChange={handleChange}
+            <Label htmlFor="legume">Type de légume *</Label>
+            <Select
+              id="legume"
+              value={selectedLegume}
+              onChange={handleLegumeChange}
               required
-            />
+            >
+              <option value="">Sélectionnez un légume</option>
+              {legumesData.map(legume => (
+                <option key={legume.id} value={legume.id}>{legume.nom}</option>
+              ))}
+            </Select>
           </FormGroup>
 
-          <FormGroup>
-            <Label htmlFor="variete">Variété *</Label>
-            <Input
-              type="text"
-              id="variete"
-              name="variete"
-              value={formData.variete}
-              onChange={handleChange}
-              required
-            />
-          </FormGroup>
+          {selectedLegume && (
+            <FormGroup>
+              <Label htmlFor="variete">Variété *</Label>
+              <Select
+                id="variete"
+                value={useCustomVariety ? 'custom' : selectedVariete}
+                onChange={handleVarieteChange}
+                required
+              >
+                <option value="">Sélectionnez une variété</option>
+                {varietes.map(variete => (
+                  <option key={variete.id} value={variete.id}>{variete.nom}</option>
+                ))}
+                <option value="custom">Autre (saisie manuelle)</option>
+              </Select>
+              
+              {useCustomVariety && (
+                <CustomVarietyInput>
+                  <Input
+                    type="text"
+                    placeholder="Saisissez le nom de la variété"
+                    value={customVariety}
+                    onChange={handleCustomVarietyChange}
+                    required
+                  />
+                </CustomVarietyInput>
+              )}
+            </FormGroup>
+          )}
+
+          {formData.photo_url && (
+            <ImagePreview imageUrl={formData.photo_url}>
+              {!formData.photo_url && 'Aucune image'}
+            </ImagePreview>
+          )}
 
           <FormGroup>
             <Label htmlFor="date_recolte">Date de récolte *</Label>
@@ -219,18 +349,6 @@ const GrainesForm = () => {
               value={formData.quantite}
               onChange={handleChange}
               required
-            />
-          </FormGroup>
-
-          <FormGroup>
-            <Label htmlFor="photo_url">URL de la photo</Label>
-            <Input
-              type="url"
-              id="photo_url"
-              name="photo_url"
-              value={formData.photo_url}
-              onChange={handleChange}
-              placeholder="https://exemple.com/image.jpg"
             />
           </FormGroup>
 

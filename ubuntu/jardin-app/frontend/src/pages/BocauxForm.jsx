@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
+import { bocauxTypes } from '../utils/foodData';
 
 const FormContainer = styled.div`
   max-width: 800px;
@@ -37,6 +38,15 @@ const Input = styled.input`
   border: 1px solid #ddd;
   border-radius: var(--border-radius);
   font-size: 1rem;
+`;
+
+const Select = styled.select`
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  background-color: white;
 `;
 
 const TextArea = styled.textarea`
@@ -98,6 +108,22 @@ const SuccessMessage = styled.div`
   border-radius: var(--border-radius);
 `;
 
+const ImagePreview = styled.div`
+  width: 100%;
+  max-width: 300px;
+  height: 200px;
+  margin: 1rem auto;
+  background-color: #f0f0f0;
+  background-image: ${props => props.imageUrl ? `url(${props.imageUrl})` : 'none'};
+  background-size: cover;
+  background-position: center;
+  border-radius: var(--border-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+`;
+
 const BocauxForm = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -106,11 +132,13 @@ const BocauxForm = () => {
     date_limite_consommation: '',
     quantite: 1,
     photo_url: '',
-    remarques: ''
+    remarques: '',
+    type: ''
   });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedType, setSelectedType] = useState('');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -118,6 +146,28 @@ const BocauxForm = () => {
       ...formData,
       [name]: value
     });
+  };
+
+  const handleTypeChange = (e) => {
+    const typeId = e.target.value;
+    setSelectedType(typeId);
+    
+    if (typeId) {
+      const selectedBocalType = bocauxTypes.find(type => type.id === typeId);
+      if (selectedBocalType) {
+        setFormData(prev => ({
+          ...prev,
+          type: selectedBocalType.nom,
+          photo_url: selectedBocalType.photo
+        }));
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        type: '',
+        photo_url: ''
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -132,9 +182,16 @@ const BocauxForm = () => {
       setLoading(true);
       setError(null);
 
+      // Préparer les données en gérant correctement les champs de date vides
+      // et en excluant le champ 'type' qui n'existe pas dans la base de données
+      const { type, ...dataToSubmit } = {
+        ...formData,
+        date_limite_consommation: formData.date_limite_consommation || null
+      };
+
       const { error } = await supabase
         .from('bocaux')
-        .insert([formData]);
+        .insert([dataToSubmit]);
 
       if (error) {
         throw error;
@@ -167,8 +224,30 @@ const BocauxForm = () => {
               value={formData.nom}
               onChange={handleChange}
               required
+              placeholder="Ex: Confiture de fraises maison, Sauce tomate basilic, etc."
             />
           </FormGroup>
+
+          <FormGroup>
+            <Label htmlFor="type">Type de préparation *</Label>
+            <Select
+              id="type"
+              value={selectedType}
+              onChange={handleTypeChange}
+              required
+            >
+              <option value="">Sélectionnez un type</option>
+              {bocauxTypes.map(type => (
+                <option key={type.id} value={type.id}>{type.nom}</option>
+              ))}
+            </Select>
+          </FormGroup>
+
+          {formData.photo_url && (
+            <ImagePreview imageUrl={formData.photo_url}>
+              {!formData.photo_url && 'Aucune image'}
+            </ImagePreview>
+          )}
 
           <FormGroup>
             <Label htmlFor="date_fabrication">Date de fabrication *</Label>
@@ -203,18 +282,6 @@ const BocauxForm = () => {
               value={formData.quantite}
               onChange={handleChange}
               required
-            />
-          </FormGroup>
-
-          <FormGroup>
-            <Label htmlFor="photo_url">URL de la photo</Label>
-            <Input
-              type="url"
-              id="photo_url"
-              name="photo_url"
-              value={formData.photo_url}
-              onChange={handleChange}
-              placeholder="https://exemple.com/image.jpg"
             />
           </FormGroup>
 
