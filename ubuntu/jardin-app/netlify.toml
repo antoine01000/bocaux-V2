@@ -1,0 +1,12 @@
+# Jardin App - Configuration Netlify
+
+site_name = "jardin-app"
+base_directory = "frontend"
+build_command = "npm run build"
+publish_directory = "frontend/dist"
+node_version = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
