@@ -1,12 +1,11 @@
 import React from 'react';
-import styled from 'styled-components';
 import { Link } from 'react-router-dom';
+import styled from 'styled-components';
 
-const NavbarContainer = styled.nav`
+const NavContainer = styled.nav`
   background-color: var(--primary-color);
   padding: 1rem;
-  color: white;
-  box-shadow: var(--box-shadow);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 `;
 
 const NavContent = styled.div`
@@ -17,9 +16,11 @@ const NavContent = styled.div`
   margin: 0 auto;
 `;
 
-const Logo = styled.div`
+const Logo = styled(Link)`
+  color: white;
   font-size: 1.5rem;
-  font-weight: bold;
+  font-weight: 700;
+  text-decoration: none;
 `;
 
 const NavLinks = styled.div`
@@ -34,24 +35,29 @@ const NavLink = styled(Link)`
   padding: 0.5rem;
   border-radius: var(--border-radius);
   transition: background-color 0.3s;
-
+  
   &:hover {
     background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  &.active {
+    background-color: rgba(255, 255, 255, 0.2);
   }
 `;
 
 const Navbar = () => {
   return (
-    <NavbarContainer>
+    <NavContainer>
       <NavContent>
-        <Logo>JardinApp</Logo>
+        <Logo to="/">Mon Jardin</Logo>
         <NavLinks>
           <NavLink to="/">Accueil</NavLink>
           <NavLink to="/bocaux">Bocaux</NavLink>
           <NavLink to="/graines">Graines</NavLink>
+          <NavLink to="/categories">Catégories</NavLink>
         </NavLinks>
       </NavContent>
-    </NavbarContainer>
+    </NavContainer>
   );
 };
 

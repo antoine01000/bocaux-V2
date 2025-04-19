@@ -1,30 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import styled from 'styled-components';
 import { supabase } from '../utils/supabaseClient';
 
 const UploadContainer = styled.div`
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 `;
 
-const UploadArea = styled.div`
+const UploadLabel = styled.label`
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+`;
+
+const UploadBox = styled.div`
   border: 2px dashed #ddd;
   border-radius: var(--border-radius);
   padding: 2rem;
   text-align: center;
-  background-color: #f9f9f9;
   cursor: pointer;
-  transition: all 0.3s;
-
+  transition: border-color 0.3s;
+  
   &:hover {
     border-color: var(--primary-color);
-    background-color: #f0f7f0;
   }
 `;
 
-const UploadIcon = styled.div`
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  color: var(--primary-color);
+const UploadInput = styled.input`
+  display: none;
 `;
 
 const UploadText = styled.p`
@@ -32,98 +34,99 @@ const UploadText = styled.p`
   color: #666;
 `;
 
-const HiddenInput = styled.input`
-  display: none;
+const UploadButton = styled.button`
+  background-color: var(--primary-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  
+  &:hover {
+    background-color: #3d8b40;
+  }
+  
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
 `;
 
 const PreviewContainer = styled.div`
-  margin-top: 1.5rem;
+  margin-top: 1rem;
 `;
 
 const ImagePreview = styled.div`
   width: 100%;
-  max-width: 300px;
   height: 200px;
-  margin: 0 auto;
   background-color: #f0f0f0;
   background-image: ${props => props.imageUrl ? `url(${props.imageUrl})` : 'none'};
   background-size: cover;
   background-position: center;
   border-radius: var(--border-radius);
+  margin-bottom: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #999;
 `;
 
-const ProgressBar = styled.div`
-  width: 100%;
-  height: 10px;
-  background-color: #f0f0f0;
-  border-radius: 5px;
-  margin-top: 1rem;
-  overflow: hidden;
-`;
-
-const Progress = styled.div`
-  height: 100%;
-  background-color: var(--primary-color);
-  width: ${props => props.value}%;
-  transition: width 0.3s;
-`;
-
 const ErrorMessage = styled.div`
-  color: var(--error-color);
-  margin-top: 1rem;
-  padding: 0.75rem;
+  color: #d32f2f;
   background-color: #ffebee;
+  padding: 0.75rem;
   border-radius: var(--border-radius);
+  margin-top: 1rem;
 `;
 
 const SuccessMessage = styled.div`
-  color: var(--success-color);
-  margin-top: 1rem;
-  padding: 0.75rem;
+  color: #388e3c;
   background-color: #e8f5e9;
+  padding: 0.75rem;
   border-radius: var(--border-radius);
+  margin-top: 1rem;
 `;
 
-const PhotoUpload = ({ onUploadComplete }) => {
+const PhotoUpload = ({ onPhotoUploaded, initialPhotoUrl = null }) => {
   const [file, setFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(initialPhotoUrl);
+  const fileInputRef = useRef(null);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     
-    if (!selectedFile) {
-      return;
+    if (selectedFile) {
+      // Vérifier le type de fichier
+      if (!selectedFile.type.startsWith('image/')) {
+        setError('Veuillez sélectionner un fichier image (JPG, PNG, etc.)');
+        return;
+      }
+      
+      // Vérifier la taille du fichier (max 5 MB)
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        setError('L\'image est trop volumineuse. Taille maximale: 5 MB');
+        return;
+      }
+      
+      setFile(selectedFile);
+      setError(null);
+      
+      // Créer une URL pour la prévisualisation
+      const objectUrl = URL.createObjectURL(selectedFile);
+      setPreviewUrl(objectUrl);
+      
+      // Nettoyer l'URL de prévisualisation lorsque le composant est démonté
+      return () => URL.revokeObjectURL(objectUrl);
     }
-    
-    // Vérifier le type de fichier
-    if (!selectedFile.type.startsWith('image/')) {
-      setError('Veuillez sélectionner une image (JPG, PNG, etc.)');
-      return;
-    }
-    
-    // Vérifier la taille du fichier (max 5 MB)
-    if (selectedFile.size > 5 * 1024 * 1024) {
-      setError('L\'image est trop volumineuse. Taille maximale: 5 MB');
-      return;
-    }
-    
-    setFile(selectedFile);
-    setError(null);
-    
-    // Créer une URL pour la prévisualisation
-    const objectUrl = URL.createObjectURL(selectedFile);
-    setPreviewUrl(objectUrl);
-    
-    // Simuler un upload immédiat
-    handleUpload(selectedFile);
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current.click();
   };
 
   const handleDragOver = (e) => {
@@ -138,7 +141,7 @@ const PhotoUpload = ({ onUploadComplete }) => {
       
       // Vérifier le type de fichier
       if (!droppedFile.type.startsWith('image/')) {
-        setError('Veuillez sélectionner une image (JPG, PNG, etc.)');
+        setError('Veuillez sélectionner un fichier image (JPG, PNG, etc.)');
         return;
       }
       
@@ -154,72 +157,50 @@ const PhotoUpload = ({ onUploadComplete }) => {
       // Créer une URL pour la prévisualisation
       const objectUrl = URL.createObjectURL(droppedFile);
       setPreviewUrl(objectUrl);
-      
-      // Simuler un upload immédiat
-      handleUpload(droppedFile);
     }
   };
 
-  const handleUpload = async (fileToUpload) => {
-    if (!fileToUpload) {
+  const uploadPhoto = async () => {
+    if (!file) {
+      setError('Veuillez sélectionner une image à télécharger');
       return;
     }
     
     try {
       setUploading(true);
-      setProgress(0);
       setError(null);
-      setSuccess(false);
       
       // Générer un nom de fichier unique
-      const fileExt = fileToUpload.name.split('.').pop();
+      const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      const filePath = `bocaux/${fileName}`;
+      const filePath = `photos/${fileName}`;
       
-      // Simuler une progression d'upload
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 95) {
-            clearInterval(progressInterval);
-            return 95;
-          }
-          return prev + 5;
-        });
-      }, 100);
-      
-      // Upload du fichier vers Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('images')
-        .upload(filePath, fileToUpload, {
-          cacheControl: '3600',
-          upsert: false
-        });
-      
-      clearInterval(progressInterval);
-      
-      if (error) {
-        throw error;
+      // Télécharger le fichier vers Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('categories')
+        .upload(filePath, file);
+        
+      if (uploadError) {
+        throw uploadError;
       }
       
-      // Obtenir l'URL publique de l'image
-      const { data: { publicUrl } } = supabase.storage
-        .from('images')
+      // Obtenir l'URL publique du fichier téléchargé
+      const { data } = supabase.storage
+        .from('categories')
         .getPublicUrl(filePath);
+        
+      const photoUrl = data.publicUrl;
       
-      setProgress(100);
-      setSuccess(true);
+      // Notifier le composant parent que la photo a été téléchargée
+      onPhotoUploaded(photoUrl);
       
-      // Appeler la fonction de callback avec l'URL de l'image
-      if (onUploadComplete) {
-        onUploadComplete(publicUrl);
-      }
-      
+      setSuccess('Photo téléchargée avec succès!');
       setTimeout(() => {
-        setSuccess(false);
+        setSuccess(null);
       }, 3000);
     } catch (error) {
-      console.error('Erreur lors de l\'upload de l\'image:', error);
-      setError('Une erreur est survenue lors de l\'upload de l\'image. Veuillez réessayer.');
+      console.error('Erreur lors du téléchargement de la photo:', error);
+      setError('Une erreur est survenue lors du téléchargement de la photo. Veuillez réessayer.');
     } finally {
       setUploading(false);
     }
@@ -227,41 +208,43 @@ const PhotoUpload = ({ onUploadComplete }) => {
 
   return (
     <UploadContainer>
-      <UploadArea
+      <UploadLabel>Photo</UploadLabel>
+      <UploadBox 
+        onClick={handleUploadClick}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        onClick={() => document.getElementById('file-input').click()}
       >
-        <UploadIcon>📷</UploadIcon>
-        <UploadText>
-          {uploading 
-            ? 'Upload en cours...' 
-            : 'Cliquez ou glissez-déposez une image ici'}
-        </UploadText>
-        <HiddenInput
-          id="file-input"
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
+        <UploadInput 
+          type="file" 
+          accept="image/*" 
+          onChange={handleFileChange} 
+          ref={fileInputRef}
         />
-        
-        {uploading && (
-          <ProgressBar>
-            <Progress value={progress} />
-          </ProgressBar>
-        )}
-      </UploadArea>
+        <UploadText>
+          Glissez-déposez une image ici ou cliquez pour sélectionner un fichier
+        </UploadText>
+        <UploadButton type="button" disabled={uploading}>
+          Sélectionner une image
+        </UploadButton>
+      </UploadBox>
       
       {previewUrl && (
         <PreviewContainer>
           <ImagePreview imageUrl={previewUrl}>
-            {!previewUrl && 'Aperçu de l\'image'}
+            {!previewUrl && 'Aucune image'}
           </ImagePreview>
+          <UploadButton 
+            type="button" 
+            onClick={uploadPhoto} 
+            disabled={uploading || !file}
+          >
+            {uploading ? 'Téléchargement en cours...' : 'Télécharger l\'image'}
+          </UploadButton>
         </PreviewContainer>
       )}
       
       {error && <ErrorMessage>{error}</ErrorMessage>}
-      {success && <SuccessMessage>Image téléchargée avec succès!</SuccessMessage>}
+      {success && <SuccessMessage>{success}</SuccessMessage>}
     </UploadContainer>
   );
 };

@@ -1,10 +1,9 @@
-import React from 'react';
-import styled from 'styled-components';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../utils/supabaseClient';
+import styled from 'styled-components';
+import { useData } from '../context/DataContext';
 
-const GrainesContainer = styled.div`
+const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
@@ -19,6 +18,7 @@ const Header = styled.div`
 
 const Title = styled.h1`
   color: var(--primary-color);
+  margin: 0;
 `;
 
 const AddButton = styled(Link)`
@@ -28,32 +28,17 @@ const AddButton = styled(Link)`
   border-radius: var(--border-radius);
   text-decoration: none;
   font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   transition: background-color 0.3s;
-
+  
   &:hover {
     background-color: #3d8b40;
   }
 `;
 
-const SearchBar = styled.div`
-  margin-bottom: 2rem;
-`;
-
-const SearchInput = styled.input`
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: var(--border-radius);
-  font-size: 1rem;
-`;
-
-const GrainesGrid = styled.div`
+const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  gap: 2rem;
 `;
 
 const GraineCard = styled.div`
@@ -62,7 +47,7 @@ const GraineCard = styled.div`
   box-shadow: var(--box-shadow);
   overflow: hidden;
   transition: transform 0.3s;
-
+  
   &:hover {
     transform: translateY(-5px);
   }
@@ -71,7 +56,7 @@ const GraineCard = styled.div`
 const GraineImage = styled.div`
   height: 200px;
   background-color: #f0f0f0;
-  background-image: ${props => props.imageUrl ? `url(${props.imageUrl})` : 'none'};
+  background-image: ${props => props.$imageUrl ? `url(${props.$imageUrl})` : 'none'};
   background-size: cover;
   background-position: center;
   display: flex;
@@ -80,51 +65,74 @@ const GraineImage = styled.div`
   color: #999;
 `;
 
-const GraineInfo = styled.div`
+const GraineContent = styled.div`
   padding: 1.5rem;
 `;
 
-const GraineName = styled.h3`
-  margin-bottom: 0.5rem;
+const GraineType = styled.div`
+  font-size: 0.875rem;
   color: var(--primary-color);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
 `;
 
-const GraineVariete = styled.p`
+const GraineName = styled.h2`
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+`;
+
+const GraineInfo = styled.div`
   margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+`;
+
+const InfoLabel = styled.span`
+  font-weight: 500;
+  margin-right: 0.5rem;
+`;
+
+const GraineNotes = styled.div`
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
   font-style: italic;
-`;
-
-const GraineDate = styled.p`
-  margin-bottom: 0.5rem;
   color: #666;
-  font-size: 0.9rem;
-`;
-
-const GraineQuantity = styled.p`
-  margin-bottom: 1rem;
-  font-weight: bold;
 `;
 
 const GraineActions = styled.div`
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
 `;
 
-const ActionButton = styled(Link)`
+const EditButton = styled(Link)`
+  background-color: #f0f0f0;
+  color: #333;
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   text-decoration: none;
   font-weight: 500;
-  font-size: 0.9rem;
   transition: background-color 0.3s;
+  
+  &:hover {
+    background-color: #e0e0e0;
+  }
 `;
 
-const ViewButton = styled(ActionButton)`
-  background-color: var(--primary-color);
-  color: white;
-
+const DeleteButton = styled.button`
+  background-color: #ffebee;
+  color: #d32f2f;
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  
   &:hover {
-    background-color: #3d8b40;
+    background-color: #ffcdd2;
   }
 `;
 
@@ -137,98 +145,89 @@ const EmptyState = styled.div`
 `;
 
 const EmptyStateText = styled.p`
-  margin-bottom: 1.5rem;
-  font-size: 1.1rem;
   color: #666;
+  margin-bottom: 1.5rem;
 `;
 
 const GrainesList = () => {
-  const [graines, setGraines] = useState([]);
+  const { graines, deleteGraine } = useData();
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchGraines();
+    // Simuler un chargement
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 500);
+    
+    return () => clearTimeout(timer);
   }, []);
 
-  const fetchGraines = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('graines')
-        .select('*')
-        .order('date_recolte', { ascending: false });
-
-      if (error) {
-        throw error;
+  const handleDelete = async (id) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette graine ?')) {
+      try {
+        await deleteGraine(id);
+      } catch (error) {
+        console.error('Erreur lors de la suppression de la graine:', error);
+        alert('Une erreur est survenue lors de la suppression de la graine.');
       }
-
-      if (data) {
-        setGraines(data);
-      }
-    } catch (error) {
-      console.error('Erreur lors de la récupération des graines:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const filteredGraines = graines.filter(graine => 
-    graine.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    graine.variete.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Non spécifiée';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR');
-  };
+  if (loading) {
+    return (
+      <Container>
+        <Header>
+          <Title>Mes Graines</Title>
+        </Header>
+        <div>Chargement...</div>
+      </Container>
+    );
+  }
 
   return (
-    <GrainesContainer>
+    <Container>
       <Header>
         <Title>Mes Graines</Title>
-        <AddButton to="/graines/ajouter">+ Ajouter une graine</AddButton>
+        <AddButton to="/graines/ajouter">+ Ajouter des Graines</AddButton>
       </Header>
-
-      <SearchBar>
-        <SearchInput 
-          type="text" 
-          placeholder="Rechercher par nom ou variété..." 
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </SearchBar>
-
-      {loading ? (
-        <p>Chargement des graines...</p>
-      ) : filteredGraines.length > 0 ? (
-        <GrainesGrid>
-          {filteredGraines.map((graine) => (
+      
+      {graines.length === 0 ? (
+        <EmptyState>
+          <EmptyStateText>Vous n'avez pas encore ajouté de graines.</EmptyStateText>
+          <AddButton to="/graines/ajouter">Ajouter vos premières graines</AddButton>
+        </EmptyState>
+      ) : (
+        <Grid>
+          {graines.map(graine => (
             <GraineCard key={graine.id}>
-              <GraineImage imageUrl={graine.photo_url}>
-                {!graine.photo_url && 'Aucune image'}
+              <GraineImage $imageUrl={graine.type_photo}>
+                {!graine.type_photo && 'Aucune image'}
               </GraineImage>
-              <GraineInfo>
-                <GraineName>{graine.nom}</GraineName>
-                <GraineVariete>Variété: {graine.variete}</GraineVariete>
-                <GraineDate>Récoltée le: {formatDate(graine.date_recolte)}</GraineDate>
-                <GraineDate>À utiliser avant: {formatDate(graine.date_limite_utilisation)}</GraineDate>
-                <GraineQuantity>Quantité: {graine.quantite}</GraineQuantity>
+              <GraineContent>
+                <GraineType>{graine.type_nom}</GraineType>
+                <GraineName>{graine.variete}</GraineName>
+                <GraineInfo>
+                  <InfoLabel>Quantité:</InfoLabel> {graine.quantite}
+                </GraineInfo>
+                <GraineInfo>
+                  <InfoLabel>Date de récolte:</InfoLabel> {new Date(graine.date_recolte).toLocaleDateString()}
+                </GraineInfo>
+                {graine.date_peremption && (
+                  <GraineInfo>
+                    <InfoLabel>Date de péremption:</InfoLabel> {new Date(graine.date_peremption).toLocaleDateString()}
+                  </GraineInfo>
+                )}
+                {graine.notes && <GraineNotes>{graine.notes}</GraineNotes>}
                 <GraineActions>
-                  <ViewButton to={`/graines/${graine.id}`}>Voir détails</ViewButton>
+                  <EditButton to={`/graines/modifier/${graine.id}`}>Modifier</EditButton>
+                  <DeleteButton onClick={() => handleDelete(graine.id)}>Supprimer</DeleteButton>
                 </GraineActions>
-              </GraineInfo>
+              </GraineContent>
             </GraineCard>
           ))}
-        </GrainesGrid>
-      ) : (
-        <EmptyState>
-          <EmptyStateText>Aucune graine trouvée. Commencez par en ajouter une !</EmptyStateText>
-          <AddButton to="/graines/ajouter">+ Ajouter une graine</AddButton>
-        </EmptyState>
+        </Grid>
       )}
-    </GrainesContainer>
+    </Container>
   );
 };
 

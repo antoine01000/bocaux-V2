@@ -1,95 +1,123 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
-// Création du contexte
+// Créer le contexte
 const DataContext = createContext();
 
 // Hook personnalisé pour utiliser le contexte
 export const useData = () => useContext(DataContext);
 
-// Fournisseur du contexte
+// Fournisseur de données
 export const DataProvider = ({ children }) => {
+  // États
   const [bocaux, setBocaux] = useState([]);
   const [graines, setGraines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  // Charger les données initiales
+  // Charger les données au montage du composant
   useEffect(() => {
     fetchBocaux();
     fetchGraines();
   }, []);
 
-  // Récupérer tous les bocaux
+  // Fonction pour générer un ID unique
+  const generateUniqueId = () => {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
+  };
+
+  // Récupérer les bocaux depuis Supabase
   const fetchBocaux = async () => {
     try {
       setLoading(true);
+      
       const { data, error } = await supabase
         .from('bocaux')
         .select('*')
-        .order('date_fabrication', { ascending: false });
-
+        .order('date', { ascending: false });
+        
       if (error) throw error;
-      setBocaux(data || []);
+      
+      if (data) {
+        setBocaux(data);
+      }
     } catch (error) {
       console.error('Erreur lors de la récupération des bocaux:', error);
-      setError('Impossible de charger les bocaux');
     } finally {
       setLoading(false);
     }
   };
 
-  // Récupérer tous les graines
+  // Récupérer les graines depuis Supabase
   const fetchGraines = async () => {
     try {
       setLoading(true);
+      
       const { data, error } = await supabase
         .from('graines')
         .select('*')
         .order('date_recolte', { ascending: false });
-
+        
       if (error) throw error;
-      setGraines(data || []);
+      
+      if (data) {
+        setGraines(data);
+      }
     } catch (error) {
       console.error('Erreur lors de la récupération des graines:', error);
-      setError('Impossible de charger les graines');
     } finally {
       setLoading(false);
     }
   };
 
   // Ajouter un bocal
-  const addBocal = async (bocal) => {
+  const addBocal = async (bocalData) => {
     try {
-      const { data, error } = await supabase
+      const newBocal = {
+        id: generateUniqueId(),
+        ...bocalData,
+        created_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase
         .from('bocaux')
-        .insert([bocal])
-        .select();
-
+        .insert([newBocal]);
+        
       if (error) throw error;
-      setBocaux([...bocaux, data[0]]);
-      return { success: true, data: data[0] };
+      
+      setBocaux(prevBocaux => [newBocal, ...prevBocaux]);
+      
+      return newBocal;
     } catch (error) {
       console.error('Erreur lors de l\'ajout du bocal:', error);
-      return { success: false, error: error.message };
+      throw error;
     }
   };
 
   // Mettre à jour un bocal
-  const updateBocal = async (id, updates) => {
+  const updateBocal = async (id, bocalData) => {
     try {
-      const { data, error } = await supabase
+      const updatedBocal = {
+        ...bocalData,
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase
         .from('bocaux')
-        .update(updates)
-        .eq('id', id)
-        .select();
-
+        .update(updatedBocal)
+        .eq('id', id);
+        
       if (error) throw error;
-      setBocaux(bocaux.map(bocal => bocal.id === id ? data[0] : bocal));
-      return { success: true, data: data[0] };
+      
+      setBocaux(prevBocaux => 
+        prevBocaux.map(bocal => 
+          bocal.id === id ? { ...bocal, ...updatedBocal } : bocal
+        )
+      );
+      
+      return updatedBocal;
     } catch (error) {
       console.error('Erreur lors de la mise à jour du bocal:', error);
-      return { success: false, error: error.message };
+      throw error;
     }
   };
 
@@ -100,48 +128,73 @@ export const DataProvider = ({ children }) => {
         .from('bocaux')
         .delete()
         .eq('id', id);
-
+        
       if (error) throw error;
-      setBocaux(bocaux.filter(bocal => bocal.id !== id));
-      return { success: true };
+      
+      setBocaux(prevBocaux => prevBocaux.filter(bocal => bocal.id !== id));
+      
+      return true;
     } catch (error) {
       console.error('Erreur lors de la suppression du bocal:', error);
-      return { success: false, error: error.message };
+      throw error;
     }
   };
 
   // Ajouter une graine
-  const addGraine = async (graine) => {
+  const addGraine = async (graineData) => {
     try {
-      const { data, error } = await supabase
+      // S'assurer que les dates vides sont null et non des chaînes vides
+      const sanitizedData = {
+        ...graineData,
+        date_peremption: graineData.date_peremption || null
+      };
+      
+      const newGraine = {
+        id: generateUniqueId(),
+        ...sanitizedData,
+        created_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase
         .from('graines')
-        .insert([graine])
-        .select();
-
+        .insert([newGraine]);
+        
       if (error) throw error;
-      setGraines([...graines, data[0]]);
-      return { success: true, data: data[0] };
+      
+      setGraines(prevGraines => [newGraine, ...prevGraines]);
+      
+      return newGraine;
     } catch (error) {
       console.error('Erreur lors de l\'ajout de la graine:', error);
-      return { success: false, error: error.message };
+      throw error;
     }
   };
 
   // Mettre à jour une graine
-  const updateGraine = async (id, updates) => {
+  const updateGraine = async (id, graineData) => {
     try {
-      const { data, error } = await supabase
+      const updatedGraine = {
+        ...graineData,
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase
         .from('graines')
-        .update(updates)
-        .eq('id', id)
-        .select();
-
+        .update(updatedGraine)
+        .eq('id', id);
+        
       if (error) throw error;
-      setGraines(graines.map(graine => graine.id === id ? data[0] : graine));
-      return { success: true, data: data[0] };
+      
+      setGraines(prevGraines => 
+        prevGraines.map(graine => 
+          graine.id === id ? { ...graine, ...updatedGraine } : graine
+        )
+      );
+      
+      return updatedGraine;
     } catch (error) {
       console.error('Erreur lors de la mise à jour de la graine:', error);
-      return { success: false, error: error.message };
+      throw error;
     }
   };
 
@@ -152,119 +205,15 @@ export const DataProvider = ({ children }) => {
         .from('graines')
         .delete()
         .eq('id', id);
-
+        
       if (error) throw error;
-      setGraines(graines.filter(graine => graine.id !== id));
-      return { success: true };
+      
+      setGraines(prevGraines => prevGraines.filter(graine => graine.id !== id));
+      
+      return true;
     } catch (error) {
       console.error('Erreur lors de la suppression de la graine:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  // Recherche avancée de bocaux
-  const searchBocaux = async (filters) => {
-    try {
-      let query = supabase.from('bocaux').select('*');
-      
-      if (filters.searchTerm) {
-        query = query.ilike('nom', `%${filters.searchTerm}%`);
-      }
-      
-      if (filters.dateMin) {
-        query = query.gte('date_fabrication', filters.dateMin);
-      }
-      
-      if (filters.dateMax) {
-        query = query.lte('date_fabrication', filters.dateMax);
-      }
-      
-      query = query.order(filters.sortBy || 'date_fabrication', { 
-        ascending: filters.sortOrder === 'asc' 
-      });
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return { success: true, data };
-    } catch (error) {
-      console.error('Erreur lors de la recherche de bocaux:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  // Recherche avancée de graines
-  const searchGraines = async (filters) => {
-    try {
-      let query = supabase.from('graines').select('*');
-      
-      if (filters.searchTerm) {
-        query = query.ilike('nom', `%${filters.searchTerm}%`);
-      }
-      
-      if (filters.searchVariete) {
-        query = query.ilike('variete', `%${filters.searchVariete}%`);
-      }
-      
-      if (filters.dateMin) {
-        query = query.gte('date_recolte', filters.dateMin);
-      }
-      
-      if (filters.dateMax) {
-        query = query.lte('date_recolte', filters.dateMax);
-      }
-      
-      if (filters.minQuantite) {
-        query = query.gte('quantite', filters.minQuantite);
-      }
-      
-      if (filters.maxQuantite) {
-        query = query.lte('quantite', filters.maxQuantite);
-      }
-      
-      query = query.order(filters.sortBy || 'date_recolte', { 
-        ascending: filters.sortOrder === 'asc' 
-      });
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return { success: true, data };
-    } catch (error) {
-      console.error('Erreur lors de la recherche de graines:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  // Upload d'une image
-  const uploadImage = async (file, folder) => {
-    try {
-      if (!file) return { success: false, error: 'Aucun fichier fourni' };
-      
-      // Générer un nom de fichier unique
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      const filePath = `${folder}/${fileName}`;
-      
-      // Upload du fichier vers Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-      
-      if (error) throw error;
-      
-      // Obtenir l'URL publique de l'image
-      const { data: { publicUrl } } = supabase.storage
-        .from('images')
-        .getPublicUrl(filePath);
-      
-      return { success: true, url: publicUrl };
-    } catch (error) {
-      console.error('Erreur lors de l\'upload de l\'image:', error);
-      return { success: false, error: error.message };
+      throw error;
     }
   };
 
@@ -273,7 +222,6 @@ export const DataProvider = ({ children }) => {
     bocaux,
     graines,
     loading,
-    error,
     fetchBocaux,
     fetchGraines,
     addBocal,
@@ -281,17 +229,13 @@ export const DataProvider = ({ children }) => {
     deleteBocal,
     addGraine,
     updateGraine,
-    deleteGraine,
-    searchBocaux,
-    searchGraines,
-    uploadImage
+    deleteGraine
   };
 
+  // Rendu du fournisseur
   return (
     <DataContext.Provider value={value}>
       {children}
     </DataContext.Provider>
   );
 };
-
-export default DataContext;

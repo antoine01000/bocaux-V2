@@ -1,10 +1,9 @@
-import React from 'react';
-import { useState, useEffect } from 'react';
-import styled from 'styled-components';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../utils/supabaseClient';
+import styled from 'styled-components';
+import { useData } from '../context/DataContext';
 
-const BocauxContainer = styled.div`
+const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
@@ -18,19 +17,17 @@ const Header = styled.div`
 `;
 
 const Title = styled.h1`
-  color: var(--primary-color);
+  font-size: 1.75rem;
+  margin: 0;
 `;
 
 const AddButton = styled(Link)`
   background-color: var(--primary-color);
   color: white;
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem 1.25rem;
   border-radius: var(--border-radius);
   text-decoration: none;
   font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   transition: background-color 0.3s;
 
   &:hover {
@@ -38,22 +35,10 @@ const AddButton = styled(Link)`
   }
 `;
 
-const SearchBar = styled.div`
-  margin-bottom: 2rem;
-`;
-
-const SearchInput = styled.input`
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: var(--border-radius);
-  font-size: 1rem;
-`;
-
-const BocauxGrid = styled.div`
+const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  gap: 2rem;
 `;
 
 const BocalCard = styled.div`
@@ -61,17 +46,15 @@ const BocalCard = styled.div`
   border-radius: var(--border-radius);
   box-shadow: var(--box-shadow);
   overflow: hidden;
-  transition: transform 0.3s;
-
-  &:hover {
-    transform: translateY(-5px);
-  }
+  display: flex;
+  flex-direction: column;
 `;
 
+// Conserve l'ancien fonctionnement : on passe l'URL en prop
 const BocalImage = styled.div`
   height: 200px;
   background-color: #f0f0f0;
-  background-image: ${props => props.imageUrl ? `url(${props.imageUrl})` : 'none'};
+  background-image: ${(props) => (props.$imageUrl ? `url(${props.$imageUrl})` : 'none')};
   background-size: cover;
   background-position: center;
   display: flex;
@@ -80,46 +63,105 @@ const BocalImage = styled.div`
   color: #999;
 `;
 
-const BocalInfo = styled.div`
+const BocalContent = styled.div`
   padding: 1.5rem;
 `;
 
-const BocalName = styled.h3`
-  margin-bottom: 0.5rem;
+const BocalType = styled.div`
+  font-size: 0.875rem;
   color: var(--primary-color);
-`;
-
-const BocalDate = styled.p`
   margin-bottom: 0.5rem;
-  color: #666;
-  font-size: 0.9rem;
+  font-weight: 500;
+  text-transform: uppercase;
 `;
 
-const BocalQuantity = styled.p`
-  margin-bottom: 1rem;
-  font-weight: bold;
+const BocalName = styled.h2`
+  font-size: 1.25rem;
+  margin: 0 0 0.5rem 0;
+`;
+
+const BocalInfo = styled.div`
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+`;
+
+const InfoLabel = styled.span`
+  font-weight: 600;
+  margin-right: 0.25rem;
+`;
+
+/* ---------- NOUVEAU ------------ */
+const QuantityControls = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+`;
+
+const QuantityButton = styled.button`
+  min-width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e0e0e0;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  &:hover:not(:disabled) {
+    background: #d4d4d4;
+  }
+`;
+/* ------------------------------- */
+
+const BocalNotes = styled.p`
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0 0 0.75rem 0;
 `;
 
 const BocalActions = styled.div`
+  margin-top: auto;
   display: flex;
-  justify-content: space-between;
+  gap: 0.5rem;
 `;
 
-const ActionButton = styled(Link)`
+const EditButton = styled(Link)`
+  background-color: #f0f0f0;
+  color: #333;
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   text-decoration: none;
   font-weight: 500;
-  font-size: 0.9rem;
   transition: background-color 0.3s;
-`;
-
-const ViewButton = styled(ActionButton)`
-  background-color: var(--primary-color);
-  color: white;
 
   &:hover {
-    background-color: #3d8b40;
+    background-color: #e0e0e0;
+  }
+`;
+
+const DeleteButton = styled.button`
+  background-color: #ffebee;
+  color: #d32f2f;
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+
+  &:hover {
+    background-color: #ffcdd2;
+    color: #b71c1c;
   }
 `;
 
@@ -132,96 +174,108 @@ const EmptyState = styled.div`
 `;
 
 const EmptyStateText = styled.p`
-  margin-bottom: 1.5rem;
-  font-size: 1.1rem;
   color: #666;
+  margin-bottom: 1.5rem;
 `;
 
 const BocauxList = () => {
-  const [bocaux, setBocaux] = useState([]);
+  const { bocaux, deleteBocal, updateBocal } = useData();
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    fetchBocaux();
-  }, []);
+  /* Helper numérique sûr */
+  const handleQuantityChange = async (bocal, delta) => {
+    const current = Number(bocal.quantite) || 0;
+    const newQuantity = current + delta;
+    if (newQuantity < 0) return;
 
-  const fetchBocaux = async () => {
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('bocaux')
-        .select('*')
-        .order('date_fabrication', { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setBocaux(data);
-      }
+      await updateBocal(bocal.id, { ...bocal, quantite: newQuantity });
     } catch (error) {
-      console.error('Erreur lors de la récupération des bocaux:', error);
-    } finally {
-      setLoading(false);
+      console.error('Erreur lors de la mise à jour de la quantité:', error);
+      alert('Une erreur est survenue lors de la mise à jour de la quantité.');
     }
   };
 
-  const filteredBocaux = bocaux.filter(bocal => 
-    bocal.nom.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Non spécifiée';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR');
+  const handleDelete = async (id) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce bocal ?')) {
+      try {
+        await deleteBocal(id);
+      } catch (error) {
+        console.error('Erreur lors de la suppression du bocal:', error);
+        alert('Une erreur est survenue lors de la suppression du bocal.');
+      }
+    }
   };
 
+  if (loading) return <p>Chargement…</p>;
+
   return (
-    <BocauxContainer>
+    <Container>
       <Header>
-        <Title>Mes Bocaux</Title>
-        <AddButton to="/bocaux/ajouter">+ Ajouter un bocal</AddButton>
+        <Title>Mes bocaux</Title>
+        <AddButton to="/bocaux/ajouter">Ajouter un bocal</AddButton>
       </Header>
 
-      <SearchBar>
-        <SearchInput 
-          type="text" 
-          placeholder="Rechercher un bocal..." 
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </SearchBar>
-
-      {loading ? (
-        <p>Chargement des bocaux...</p>
-      ) : filteredBocaux.length > 0 ? (
-        <BocauxGrid>
-          {filteredBocaux.map((bocal) => (
-            <BocalCard key={bocal.id}>
-              <BocalImage imageUrl={bocal.photo_url}>
-                {!bocal.photo_url && 'Aucune image'}
-              </BocalImage>
-              <BocalInfo>
-                <BocalName>{bocal.nom}</BocalName>
-                <BocalDate>Fabriqué le: {formatDate(bocal.date_fabrication)}</BocalDate>
-                <BocalDate>À consommer avant: {formatDate(bocal.date_limite_consommation)}</BocalDate>
-                <BocalQuantity>Quantité: {bocal.quantite}</BocalQuantity>
-                <BocalActions>
-                  <ViewButton to={`/bocaux/${bocal.id}`}>Voir détails</ViewButton>
-                </BocalActions>
-              </BocalInfo>
-            </BocalCard>
-          ))}
-        </BocauxGrid>
-      ) : (
+      {bocaux.length === 0 ? (
         <EmptyState>
-          <EmptyStateText>Aucun bocal trouvé. Commencez par en ajouter un !</EmptyStateText>
-          <AddButton to="/bocaux/ajouter">+ Ajouter un bocal</AddButton>
+          <EmptyStateText>Aucun bocal pour le moment.</EmptyStateText>
+          <AddButton to="/bocaux/ajouter">Commencer</AddButton>
         </EmptyState>
+      ) : (
+        <Grid>
+          {bocaux.map((bocal) => {
+            const imageUrl = bocal.photo_url || bocal.type_photo || '';
+            return (
+              <BocalCard key={bocal.id}>
+                <BocalImage $imageUrl={imageUrl}>
+                  {!imageUrl && 'Pas d’image'}
+                </BocalImage>
+
+                <BocalContent>
+                  <BocalType>{bocal.type_nom}</BocalType>
+                  <BocalName>{bocal.contenu}</BocalName>
+
+                  <BocalInfo>
+                    <InfoLabel>Quantité :</InfoLabel>
+                    <QuantityControls>
+                      <QuantityButton
+                        onClick={() => handleQuantityChange(bocal, -1)}
+                        disabled={Number(bocal.quantite) <= 0}
+                      >
+                        –
+                      </QuantityButton>
+                      <span>{bocal.quantite}</span>
+                      <QuantityButton onClick={() => handleQuantityChange(bocal, 1)}>
+                        +
+                      </QuantityButton>
+                    </QuantityControls>
+                  </BocalInfo>
+
+                  <BocalInfo>
+                    <InfoLabel>Date :</InfoLabel>
+                    {new Date(bocal.date).toLocaleDateString()}
+                  </BocalInfo>
+
+                  {bocal.notes && <BocalNotes>{bocal.notes}</BocalNotes>}
+
+                  <BocalActions>
+                    <EditButton to={`/bocaux/modifier/${bocal.id}`}>Modifier</EditButton>
+                    <DeleteButton onClick={() => handleDelete(bocal.id)}>
+                      Supprimer
+                    </DeleteButton>
+                  </BocalActions>
+                </BocalContent>
+              </BocalCard>
+            );
+          })}
+        </Grid>
       )}
-    </BocauxContainer>
+    </Container>
   );
 };
 
